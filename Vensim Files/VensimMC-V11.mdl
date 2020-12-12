@@ -1,0 +1,657 @@
+{UTF-8}
+BaseIFR=
+	0.005
+	~	
+	~		|
+
+IFR[Rgn]= INITIAL(
+	if then else(AdjIFR[Rgn] = -1, BaseIFR, AdjIFR[Rgn]))
+	~	
+	~	Note: -1 is placeholder value for missing data in InputConstants.vdf
+	|
+
+SFrac[Rgn]=
+	Max(1e-06,1-(CumulativeDpm[Rgn]*DeathReportingRatio[Rgn]/IFR[Rgn])/1e+06)
+	~	
+	~		|
+
+AdjIFR[Rgn]=
+	GET VDF CONSTANTS('InputConstants.vdf', 'AdjIFR[Rgn]' , 1)
+	~	
+	~		|
+
+CumulativeDpm[Rgn]= INTEG (
+	DeathsOverTime[Rgn],
+		0)
+	~	
+	~		|
+
+DeathsOverTime[Rgn]=
+	if then else(Time < DataStartTimeDeaths[Rgn], 0, new dpm interpolated[Rgn])
+	~	
+	~		|
+
+DeathsOverTimeRaw[Rgn]=
+	if then else(new dpm[Rgn]=:NA:, :NA:, new dpm[Rgn])
+	~	
+	~		|
+
+roll[Rgn]=
+	if then else(Time < DataStartTimeCases[Rgn], 0, sum(SelectRoll[Shft!]*ShiftedInfection\
+		[Rgn,Shft!]))
+	~	
+	~		|
+
+DataStartTimeDeaths[Rgn]= INITIAL(
+	GET DATA FIRST TIME(new dpm[Rgn]))
+	~	
+	~		|
+
+dn[Rgn]=
+	SMOOTH N(DeathsOverTime[Rgn], if then else(dn[Rgn]<DeathsOverTime
+	[Rgn],PMean[Rgn],PMeanRelax[Rgn]), 0, PMeanOrder)
+	~	
+	~		|
+
+DataStartTimeCases[Rgn]= INITIAL(
+	GET DATA FIRST TIME(new cases[Rgn]))
+	~	
+	~		|
+
+new dpm interpolated[Rgn]:INTERPOLATE::=
+	new dpm[Rgn]
+	~	
+	~		|
+
+eqDeath[Rgn]=
+	ZIDZ(ln(beta[Rgn]*DiseaseDuration*SFrac[Rgn]), alpha[Rgn])
+	~	
+	~		|
+
+Re[Rgn]=
+	beta[Rgn] * g death[Rgn] * DiseaseDuration*SFrac[Rgn]
+	~	
+	~		|
+
+inf exp[Rgn]=
+	beta[Rgn]*roll[Rgn]*g death[Rgn]*SFrac[Rgn]
+	~	Person/Day
+	~		|
+
+DeathReportingRatio[Rgn]=
+	500
+	~	
+	~		|
+
+g death[Rgn]=
+	exp(-alpha[Rgn]*dn[Rgn])
+	~	
+	~		|
+
+PMeanOrder=
+	2
+	~	
+	~		|
+
+PMeanRelax[Rgn]=
+	20
+	~	Day
+	~		|
+
+InfShift[Shft]:INTERPOLATE::=
+	-Shft
+	~	
+	~		|
+
+ShiftedInfection[Rgn,Shft]:INTERPOLATE::=
+	TIME SHIFT(new cases[Rgn], InfShift[Shft])
+	~	
+	~		|
+
+new cases[Rgn]:RAW:
+	~	Person/Day
+	~		|
+
+new dpm[Rgn]:RAW:
+	~	Person/Day
+	~		|
+
+alp[Rgn]=
+	0.1
+	~	dmnl
+	~	This parameter is 1 over the number of failures in negative binomial \
+		before experiment is stopped. A value between 0 and 1 (excluding zero) is \
+		legitimate calibraiton parameters here.
+	|
+
+alpha[Rgn]=
+	alpha 0[Rgn]+1/(1+exp(timesens[Rgn]))*(alpha f[Rgn]-alpha 0[Rgn])
+	~	
+	~		|
+
+alpha 0[Rgn]=
+	1
+	~	
+	~		|
+
+alpha f[Rgn]=
+	2
+	~	
+	~		|
+
+beta[Rgn]=
+	0.1
+	~	
+	~		|
+
+DataFlowOverTime[Rgn]=
+	if then else(new cases[Rgn]=:NA:, :NA:, new cases[Rgn])
+	~	Person/Day
+	~		|
+
+DataIncluded[Rgn]=
+	1
+	~	dmnl
+	~		|
+
+Di[Rgn]  = 
+        DataFlowOverTime[Rgn]
+	~	Person/Day
+	~		|
+
+DiseaseDuration=
+	10
+	~	
+	~		|
+
+eps=
+	0.01
+	~	Person/Day
+	~		|
+
+Mu[Rgn]=
+	Max ( eps , 
+	             inf exp[Rgn] )
+	~	Person/Day
+	~		|
+
+NBL1[Rgn]  = 
+        if then else ( DataFlowOverTime[Rgn] 
+                  = 0, 
+             - ln ( 1
+                       + alp[Rgn] 
+                            * Mu[Rgn] ) 
+                  / alp[Rgn] , 
+             0)
+	~	dmnl
+	~	This is the part of negative binomial distribution calcualted when \
+		outcomes are zero.
+	|
+
+NBL2[Rgn]  = 
+        if then else ( DataFlowOverTime[Rgn] 
+                  > 0, 
+             GAMMA LN ( Di[Rgn] 
+                       + 1
+                            / alp[Rgn] ) 
+                  - GAMMA LN ( 1
+                            / alp[Rgn] ) 
+                  - GAMMA LN ( Di[Rgn] 
+                            + 1) 
+                  - ( Di[Rgn] 
+                       + 1
+                            / alp[Rgn] ) 
+                       * ln ( 1
+                                 + alp[Rgn] 
+                                      * Mu[Rgn] ) 
+                  + Di[Rgn] 
+                       * ( ln ( alp[Rgn] ) 
+                            + ln ( Mu[Rgn] ) ) , 
+             0)
+	~	dmnl
+	~	This is the second piece in the loglikelihood for negative binomial which \
+		only applies to non-zero data points.
+	|
+
+NBL3[Rgn]  = 
+        if then else ( Di[Rgn] 
+                  > 0, 
+             - GAMMA LN ( Di[Rgn] 
+                       + 1) 
+                  - ( Di[Rgn] 
+                       + 1
+                            / alp[Rgn] ) 
+                       * ln ( 1
+                                 + alp[Rgn] 
+                                      * Mu[Rgn] ) 
+                  + Di[Rgn] 
+                       * ( ln ( alp[Rgn] ) 
+                            + ln ( Mu[Rgn] ) ) , 
+             0)
+	~	dmnl
+	~		|
+
+NBLLFlow[Rgn]=
+	( NBL1[Rgn] 
+	             + NBL2[Rgn] ) 
+	             *DataIncluded[Rgn]
+	~	dmnl
+	~		|
+
+PMean[Rgn]=
+	5
+	~	
+	~		|
+
+Pssn:
+	(p1-p100)
+	~	
+	~		|
+
+Rgn:
+	AFG, ALB, ARE, ARG, ARM, AUS, AUT, AZE, BEL, BGD,
+	       BGR, BHR, BIH, BLR, BOL, BRA, CAN, CHE, CHL, CHN,
+	       CIV, COD, COL, CRI, CZE, DEU, DNK, DOM, DZA, ECU,
+	       EGY, ESP, ETH, FRA, GBR, GHA, GIN, GRC, GTM, HND,
+	       HRV, HUN, IDN, IND, IRL, IRN, IRQ, ISR, ITA, JPN,
+	       KAZ, KEN, KGZ, KOR, KWT, LBN, LBY, MAR, MDA, PAK, 
+	       MDG, MEX, MKD, MYS, NAM, NGA, NLD, NOR, NPL, OMN,
+	       PAN, PER, PHL, POL, PRI, PRY, PSE, QAT, ROU, RUS, 
+	       SAU, SDN, SEN, SGP, SLV, SRB, SWE, TUN, TUR, UKR, 
+	       USA, UZB, VEN, XKX, ZAF, ZMB
+	~	
+	~	AFG, ALB, ARE, ARG, ARM, AUS, AUT, AZE, BEL, BGD,
+		       BGR, BHR, BIH, BLR, BOL, BRA, CAN, CHE, CHL, CHN,
+		       CIV, COD, COL, CRI, CZE, DEU, DNK, DOM, DZA, ECU,
+		       EGY, ESP, ETH, FRA, GBR, GHA, GIN, GRC, GTM, HND,
+		       HRV, HUN, IDN, IND, IRL, IRN, IRQ, ISR, ITA, JPN,
+		       KAZ, KEN, KGZ, KOR, KOS, KWT, LBN, LBY, MAR, MDA,
+		       MDG, MEX, MKD, MYS, NAM, NGA, NLD, NOR, NPL, OMN,
+		       PAK, PAN, PER, PHL, POL, PRI, PRY, PSE, QAT, ROU,
+		       RUS, SAU, SDN, SEN, SGP, SLV, SRB, SWE, TUN, TUR,
+		       UKR, USA, UZB, VEN, ZAF, ZMB
+	|
+
+SelectRoll[Shft]=
+	if then else(Shft>DiseaseDuration,0,1)
+	~	
+	~		|
+
+Series:
+	Infection
+	~	
+	~		|
+
+Shft:
+	(S1-S20)
+	~	
+	~		|
+
+t0[Rgn]=
+	20
+	~	
+	~		|
+
+theta[Rgn]=
+	1
+	~	
+	~		|
+
+timesens[Rgn]=
+	MIN(50, -(Time-t0[Rgn])/theta[Rgn])
+	~	
+	~		|
+
+********************************************************
+	.Control
+********************************************************~
+		Simulation Control Parameters
+	|
+
+FINAL TIME  = 334
+	~	Day
+	~	The final time for the simulation.
+	|
+
+INITIAL TIME  = 0
+	~	Day
+	~	The initial time for the simulation.
+	|
+
+SAVEPER  = 
+        TIME STEP
+	~	Day [0,?]
+	~	The frequency with which output is stored.
+	|
+
+TIME STEP  = 1
+	~	Day [0,?]
+	~	The time step for the simulation.
+	|
+
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*View 1
+$192-192-192,0,Times New Roman|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,100,0
+10,1,DataFlowOverTime,460,736,64,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,2,inf exp,781,522,22,11,8,131,0,0,0,0,0,0,0,0,0,0,0,0
+10,3,new dpm,214,261,30,11,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-0-255,0,0,0,0,0,0
+10,4,new cases,261,728,33,11,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-0-255,0,0,0,0,0,0
+1,5,4,1,0,0,0,0,0,64,0,-1--1--1,,1|(338,730)|
+10,6,NBL1,627,630,22,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,7,NBL2,732,622,22,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,8,NBL3,793,640,22,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,9,Di,522,675,9,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,10,Mu,888,611,13,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,11,1,9,0,0,0,0,0,128,0,-1--1--1,,1|(486,709)|
+1,12,2,10,0,0,0,0,0,128,0,-1--1--1,,1|(829,562)|
+1,13,9,7,0,0,0,0,0,128,0,-1--1--1,,1|(613,651)|
+1,14,10,6,0,0,0,0,0,128,0,-1--1--1,,1|(768,618)|
+10,15,alp,683,670,11,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|11||0-128-0,0,0,0,0,0,0
+1,16,15,6,0,0,0,0,0,128,0,-1--1--1,,1|(662,656)|
+1,17,15,7,0,0,0,0,0,64,0,-1--1--1,,1|(702,651)|
+1,18,10,8,0,0,0,0,0,128,0,-1--1--1,,1|(851,621)|
+1,19,15,8,0,0,0,0,0,128,0,-1--1--1,,1|(725,658)|
+1,20,9,8,0,0,0,0,0,128,0,-1--1--1,,1|(644,658)|
+1,21,10,7,0,0,0,0,0,64,0,-1--1--1,,1|(821,614)|
+1,22,1,6,0,0,0,0,0,128,0,-1--1--1,,1|(535,687)|
+1,23,1,7,0,0,0,0,0,128,0,-1--1--1,,1|(589,681)|
+10,24,NBLLFlow,617,591,38,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,25,6,24,0,0,0,0,0,128,0,-1--1--1,,1|(624,617)|
+1,26,7,24,0,0,0,0,0,128,0,-1--1--1,,1|(689,610)|
+10,27,DataIncluded,499,605,43,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,28,27,24,0,0,0,0,0,128,0,-1--1--1,,1|(553,598)|
+10,29,alpha,810,354,18,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,30,alpha 0,849,286,24,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,31,alpha f,899,337,22,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,32,timesens,918,381,28,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,33,t0,984,401,8,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,34,theta,948,436,17,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,35,33,32,0,0,0,0,0,128,0,-1--1--1,,1|(967,396)|
+1,36,34,32,0,0,0,0,0,128,0,-1--1--1,,1|(936,414)|
+1,37,32,29,0,0,0,0,0,128,0,-1--1--1,,1|(865,367)|
+1,38,31,29,0,0,0,0,0,128,0,-1--1--1,,1|(859,344)|
+1,39,30,29,0,0,0,0,0,128,0,-1--1--1,,1|(833,313)|
+1,40,29,57,0,0,0,0,0,128,0,-1--1--1,,1|(757,389)|
+10,41,beta,664,494,15,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,42,41,2,0,0,0,0,0,128,0,-1--1--1,,1|(711,504)|
+10,43,roll,467,550,12,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,44,43,2,0,0,0,0,0,128,0,-1--1--1,,1|(612,536)|
+10,45,eps,966,628,13,11,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,46,45,10,0,0,0,0,0,64,0,-1--1--1,,1|(933,621)|
+10,47,Time,876,423,26,11,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,48,47,32,0,0,0,0,0,64,0,-1--1--1,,1|(892,406)|
+10,49,ShiftedInfection,294,561,49,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,50,4,49,0,0,0,0,0,64,0,-1--1--1,,1|(275,651)|
+10,51,SelectRoll,344,520,33,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,52,DiseaseDuration,235,493,52,11,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,53,52,51,0,0,0,0,0,64,0,-1--1--1,,1|(288,506)|
+1,54,51,43,0,0,0,0,0,128,0,-1--1--1,,1|(409,535)|
+1,55,49,43,0,0,0,0,0,128,0,-1--1--1,,1|(392,554)|
+10,56,PMean,464,231,24,11,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,57,g death,693,433,24,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,58,57,2,0,0,0,0,0,128,0,-1--1--1,,1|(731,472)|
+12,59,0,1437,147,92,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V1 - renames data variables, dropped constants file as not needed
+12,60,0,1436,223,79,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V2 - fixed TIME SHIFT direction, pinned DiseaseDuration at 14
+10,61,InfShift,185,598,24,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,62,61,49,0,0,0,0,0,128,0,-1--1--1,,1|(228,583)|
+12,63,0,1436,292,70,19,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V3 - added cap of 50 on timesens variable
+12,64,0,1441,348,53,19,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V4 - added calculation of Re
+10,65,Re,508,490,11,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,66,41,65,0,0,0,0,0,128,0,-1--1--1,,1|(590,492)|
+1,67,52,65,0,0,0,0,0,128,0,-1--1--1,,1|(385,491)|
+1,68,57,65,0,0,0,0,0,128,0,-1--1--1,,1|(600,460)|
+12,69,0,1443,417,95,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V5 - modified DataFlowOverTime to enable easier export of results
+10,70,dn,559,323,10,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,71,PMeanRelax,583,241,41,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,72,PMeanOrder,688,249,43,11,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,73,72,70,0,0,0,0,0,128,1,-1--1--1,,1|(625,285)|
+1,74,70,57,0,0,0,0,0,64,0,-1--1--1,,1|(618,372)|
+12,75,0,1438,498,95,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V6-Used Erlang delays rather than poisson with asymmetric output
+10,76,DeathsOverTimeRaw,286,210,69,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,77,3,76,0,0,0,0,0,128,0,-1--1--1,,1|(245,238)|
+10,78,CumulativeDpm,474,372,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,79,SFrac,477,453,21,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,80,78,79,0,0,0,0,0,128,0,-1--1--1,,1|(474,410)|
+10,81,DeathReportingRatio,244,449,67,9,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,82,81,79,0,0,0,0,0,128,0,-1--1--1,,1|(376,450)|
+1,83,79,65,0,0,0,0,0,128,0,-1--1--1,,1|(487,466)|
+1,84,79,2,1,0,0,0,0,128,0,-1--1--1,,1|(648,463)|
+12,85,0,1439,627,74,19,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V8-Added Susceptible Fraction explicitly
+10,86,eqDeath,560,404,28,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,87,29,86,0,0,0,0,0,128,0,-1--1--1,,1|(696,376)|
+1,88,41,86,0,0,0,0,0,128,0,-1--1--1,,1|(617,453)|
+1,89,79,86,0,0,0,0,0,128,0,-1--1--1,,1|(511,432)|
+1,90,52,86,0,0,0,0,0,128,0,-1--1--1,,1|(396,448)|
+1,91,56,70,0,0,0,0,0,64,0,-1--1--1,,1|(506,272)|
+1,92,71,70,0,0,0,0,0,64,0,-1--1--1,,1|(573,275)|
+12,93,0,1441,565,89,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V7 - Testing linear-weighted combination of delay orders
+12,94,0,1436,702,98,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V9 - Removed linear-weighted combination of delay orders, pinned PMeanOrder at 2
+12,95,0,1440,781,121,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V10 - changed new dpm to yield both Raw and Interpolated data; corrected roll to start only with case data
+10,96,Time,387,400,26,11,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+10,97,DataStartTimeCases,415,652,66,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,98,4,97,0,0,0,0,0,64,1,-1--1--1,,1|(333,692)|
+1,99,97,43,0,0,0,0,0,128,0,-1--1--1,,1|(436,608)|
+1,100,96,43,0,0,0,0,0,128,0,-1--1--1,,1|(423,468)|
+10,101,DataStartTimeDeaths,238,321,69,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,102,3,101,0,0,0,0,0,64,1,-1--1--1,,1|(223,285)|
+10,103,new dpm interpolated,371,256,38,19,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,104,3,103,0,0,0,0,0,128,0,-1--1--1,,1|(281,259)|
+10,105,DeathsOverTime,420,323,57,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,106,101,105,0,0,0,0,0,128,0,-1--1--1,,1|(328,321)|
+1,107,105,70,0,0,0,0,0,128,0,-1--1--1,,1|(506,323)|
+1,108,96,105,0,0,0,0,0,64,0,-1--1--1,,1|(400,367)|
+1,109,103,105,0,0,0,0,0,128,0,-1--1--1,,1|(393,287)|
+1,110,105,78,0,0,0,0,0,128,0,-1--1--1,,1|(436,338)|
+10,111,AdjIFR,232,416,26,11,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+12,112,0,1674,148,108,28,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V11 - added AdjIFR data, changed CasesPerReportedDeath to DeathReportingRatio
+10,113,BaseIFR,282,367,29,11,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,114,IFR,328,414,14,11,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,115,111,114,0,0,0,0,0,128,1,-1--1--1,,1|(279,415)|
+1,116,113,114,0,0,0,0,0,128,1,-1--1--1,,1|(299,385)|
+1,117,114,79,0,0,0,0,0,128,0,-1--1--1,,1|(392,430)|
+///---\\\
+:L<%^E!@
+1:InputConstants.vdf
+1:Test.vdfx
+9:Test
+10:Full2.out
+11:VensimMCMC-V2.voc
+12:MCMCPayoff-V0.vpd
+13:InputData.vdf
+15:1,0,0,0,0,0
+19:100,0
+27:0,
+34:0,
+42:1
+72:0
+73:0
+4:Time
+5:eqDeath[Rgn]
+35:Date
+36:YYYY-MM-DD
+37:2000
+38:1
+39:1
+40:4
+41:0
+76:0
+77:0
+78:0
+79:0
+80:0
+81:0
+24:0
+25:100
+26:100
+75:
+43:
+6:AFG
+6:ALB
+6:ARE
+6:ARG
+6:ARM
+6:AUS
+6:AUT
+6:AZE
+6:BEL
+6:BGD
+6:BGR
+6:BHR
+6:BIH
+6:BLR
+6:BOL
+6:BRA
+6:CAN
+6:CHE
+6:CHL
+6:CHN
+6:CIV
+6:COD
+6:COL
+6:CRI
+6:CZE
+6:DEU
+6:DNK
+6:DOM
+6:DZA
+6:ECU
+6:EGY
+6:ESP
+6:ETH
+6:FRA
+6:GBR
+6:GHA
+6:GIN
+6:GRC
+6:GTM
+6:HND
+6:HRV
+6:HUN
+6:IDN
+6:IND
+6:Infection
+6:IRL
+6:IRN
+6:IRQ
+6:ISR
+6:ITA
+6:JPN
+6:KAZ
+6:KEN
+6:KGZ
+6:KOR
+6:KWT
+6:LBN
+6:LBY
+6:MAR
+6:MDA
+6:MDG
+6:MEX
+6:MKD
+6:MYS
+6:NAM
+6:NGA
+6:NLD
+6:NOR
+6:NPL
+6:OMN
+6:p1
+6:p10
+6:p11
+6:p12
+6:p13
+6:p14
+6:p15
+6:p16
+6:p17
+6:p18
+6:p19
+6:p2
+6:p20
+6:p21
+6:p22
+6:p23
+6:p24
+6:p25
+6:p26
+6:p27
+6:p28
+6:p29
+6:p3
+6:p30
+6:p31
+6:p32
+6:p33
+6:p34
+6:p35
+6:p36
+6:p37
+6:p38
+6:p39
+6:p4
+6:p40
+6:p41
+6:p42
+6:p43
+6:p44
+6:p45
+6:p46
+6:p47
+6:p48
+6:p49
+6:p5
+6:p50
+6:p51
+6:p52
+6:p53
+6:p54
+6:p55
+6:p56
+6:p57
+6:p58
+6:p59
+6:p6
+6:p60
+6:p7
+6:p8
+6:p9
+6:PAK
+6:PAN
+6:PER
+6:PHL
+6:POL
+6:PRI
+6:PRY
+6:PSE
+6:QAT
+6:ROU
+6:RUS
+6:S1
+6:SAU
+6:SDN
+6:SEN
+6:SGP
+6:SLV
+6:SRB
+6:SWE
+6:TUN
+6:TUR
+6:UKR
+6:USA
+6:UZB
+6:VEN
+6:XKX
+6:ZAF
+6:ZMB
