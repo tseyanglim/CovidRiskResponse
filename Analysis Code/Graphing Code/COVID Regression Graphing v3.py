@@ -123,7 +123,7 @@ def plot_scatter(res, x, y):
     """Plots double-histogram scatterplot of country results for `x` and 
     `y` (by default, g(D) and DPM), with `y` on log-scale"""
     # Create main figure
-    fig0, ax0 = plt.subplots(figsize=[12, 12], constrained_layout=True)
+    fig0, ax0 = plt.subplots(figsize=[8, 8], constrained_layout=True)
     
     area = (1e-03 * np.sqrt(res['population'])) ** 2 # Assign area based on population
     
@@ -139,12 +139,14 @@ def plot_scatter(res, x, y):
     ax0.set_yscale('log') # Set Y-axis to log scale
     
     # Plot main scatterplot with GDP color scale and area proportional to population
-    ax0.scatter(res_x, res_y, s=area, c=np.log(gdp), alpha=0.5)
+    ax0.scatter(res_x, res_y, s=area, alpha=0.5)
     
     # Label points with country abbreviations
     for i in res_x.index:
         ax0.annotate(i, (res_x[i], res_y[i]), fontsize=8)
     
+    ### THIS SECTION FOR AXIS HISTOGRAMS IF DESRIED ###
+    """
     # Create axes for X- and Y-axis histograms
     divider = make_axes_locatable(ax0)
     ax_histx = divider.append_axes('top', 1.5, pad=0.1, sharex=ax0)
@@ -160,14 +162,14 @@ def plot_scatter(res, x, y):
     yhist = np.histogram(res_y, bins=20) # Create temporary histogram to calculate bin limits
     logbins = np.logspace(np.log10(yhist[1][0]),np.log10(yhist[1][-1]),len(yhist[1]))
     yhist = ax_histy.hist(res_y, bins=logbins, orientation='horizontal')
-
+    
     # Format Y-axis ticks as decimals instead of scientific notation
     ax_histy.yaxis.set_major_formatter(mticker.FuncFormatter(lambda y, _: '{:.16g}'.format(y)))
-    
+    """
     # Set labels and titles
     ax0.set_xlabel(r'Quasi-equilibrium normalized contact rate $g^{eq}$')
     ax0.set_ylabel(r'Quasi-equilibrium death rate per million $d^{eq}_{NM}$')
-    fig0.suptitle('Normalized contacts vs. expected deaths', fontsize=14)
+    fig0.suptitle('Expected deaths vs. normalized contacts', fontsize=14)
     
     fig0.savefig(f"./{baserunname}_Scatter.jpg", bbox_inches='tight')
 
@@ -194,6 +196,35 @@ def plot_scatter_basic(res):
     fig0.suptitle('Reported death rates vs. effective reproduction rates', fontsize=14)
     
     fig0.savefig(f"./{baserunname}_Scatter_Basic.jpg", bbox_inches='tight')
+
+
+def plot_scatter_mobility(res):
+    """Plot scatterplots of log(mean DPM) against change in mobility (as 
+    average, workplace, and retail & recreation visits)"""
+    # Loop through averge, workplace, and R&R plots
+    for sfx, lbl in zip(['avg', 'wk', 'rr'], 
+                        ['', ' (workplace)', ' (retail & recreation)']):
+        # Create figure and scatterplot
+        fig0, ax0 = plt.subplots(figsize=[8, 8], constrained_layout=True)
+        area = (1e-03 * np.sqrt(res['population'])) ** 2 # Assign area based on population
+        ax0.set_yscale('log')
+        ax0.scatter(res[f'mob_{sfx}'], res['mean_dpm'], s=area, alpha=0.5)
+
+        # Label points with country abbreviations
+        for i in res.index:
+            ax0.annotate(i, (res[f'mob_{sfx}'][i], res['mean_dpm'][i]), fontsize=8)
+
+        # Format Y-axis ticks without scientific notation
+        ax0.yaxis.set_major_formatter(mticker.ScalarFormatter())
+        ax0.yaxis.get_major_formatter().set_scientific(False)
+
+        # Set labels and titles
+        ax0.set_xlabel(r'% change in daily visits')
+        ax0.set_ylabel(r'Average death rate per million $d_{NM}$')
+        fig0.suptitle(f'Reported death rates vs. % change in daily visits {lbl}', fontsize=14)
+
+        fig0.savefig(f"./{baserunname}_Scatter_Mob_{sfx}.jpg", bbox_inches='tight')
+    
     
 def plot_country_fits(c_list, c_names):
     """Plot four illustrative country-level graphs for countries in 
@@ -520,6 +551,13 @@ for i in [main_dur]:
     corr = pearsonr(results['end_gdn'], results['end_dpm'])
     logcorr = pearsonr(results['end_gdn'], np.log10(results['end_dpm']))
     
+    # Calculate log-correlation for mobility and DPM
+    mobdf = res.filter(['mob_rr', 'mob_wk', 'mob_avg', 'mean_dpm'])
+    mobdf.dropna(axis=0, inplace=True) # Drop countries missing mobility data
+    rrcorr = pearsonr(mobdf['mob_rr'], np.log10(mobdf['mean_dpm']))
+    wkcorr = pearsonr(mobdf['mob_wk'], np.log10(mobdf['mean_dpm']))
+    avgcorr = pearsonr(mobdf['mob_avg'], np.log10(mobdf['mean_dpm']))
+    
     # Compile summary output as text list
     summarytext.extend(
         [f"Total countries\t{len(countrylist)}\n", 
@@ -535,6 +573,9 @@ for i in [main_dur]:
          f"Final responsiveness\t{np.exp(-results['end_alpha'].median())}\n", 
          f"Correlation\t{corr[0]}\t{corr[1]}\n", 
          f"LogCorrelation\t{logcorr[0]}\t{logcorr[1]}\n", 
+         f"WorkMobility Correlation\t{wkcorr[0]}\t{wkcorr[1]}\n", 
+         f"RRMobility Correlation\t{rrcorr[0]}\t{rrcorr[1]}\n", 
+         f"AvgMobility Correlation\t{avgcorr[0]}\t{avgcorr[1]}\n", 
          f"Historical window\t{hist_window}\n", 
          f"eq_gdn MNIQR\t{results['eq_gdn_niqr'].median()}\n", 
          f"eq_dpm MNIQR\t{results['eq_dpm_niqr'].median()}\n", 
@@ -555,6 +596,7 @@ for i in [main_dur]:
     plot_scatter(results, 'end_gdn', 'end_dpm')
     plot_intervals(results, 'end_gdn', 'end_dpm', ci=(0.05, 0.95))
     plot_scatter_basic(results)
+    plot_scatter_mobility(results)
     plot_sensitivity(mainrunname, sens_vars, sens_mults)
     plot_country_fits(c_list, c_names)
     plot_regression(mainrunname)

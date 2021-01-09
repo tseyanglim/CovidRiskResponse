@@ -744,7 +744,14 @@ write_log(f"-----\nStarting new log at {time.ctime()}\nReady to work!", logfile)
 
 ##### THIS CELL IS FOR UPDATING DATA ONLY #####
 
-data = pd.read_csv(data_url) # Read data from URL for raw data CSV
+# Read main and mobility data from URL for raw data CSVs
+data = pd.read_csv(data_url)
+mobdata = pd.read_csv(mobdata_url)
+
+# Extract dictionary mapping of ISO codes to OWID country names
+names = data.filter(['iso_code','location'], axis=1).drop_duplicates()
+names.replace({'iso_code': renames}, inplace=True) # Rename unusual ISO codes as needed
+c_dict = dict(zip(names['location'], names['iso_code']))
 
 # Subset CSV to relevant data fields
 data = data.filter(['iso_code','date', 'total_cases', 'new_cases_smoothed', 
@@ -798,13 +805,30 @@ table = table.reorder_levels(['field', 'iso_code']).sort_index()
 # Calculate aggregate dpm data for later use
 mean_dpm = table.loc['new_dpm'][-hist_window:].mean(axis=1) # Mean over last `hist_window` days
 
-# Export processed dataframe to .tab and import to VDF, or read in existing .tab
+# Extract mobility change data to pivot table
+mobdata['average'] = pd.concat([mobdata['retail_and_recreation'], mobdata['workplaces']], 
+                               axis=1).mean(axis=1) # Get average of R&R and workplace values
+mobdata.replace({'Country': c_dict}, inplace=True) # Convert country names to ISO codes
+mobtable = pd.pivot_table(mobdata, values=['retail_and_recreation', 'workplaces', 'average'], 
+                          index='Year', columns='Country')
+mobtable = mobtable.T
+
+# Calculate averages over last `hist_window` days & recompile into new dataframe
+mobtable = mobtable[mobtable.columns[-hist_window:]]
+tbm = mobtable.mean(axis=1)
+mobmean = pd.concat([tbm.loc['average'], tbm.loc['retail_and_recreation'], tbm.loc['workplaces']], 
+                    keys=['mob_avg', 'mob_rr', 'mob_wk'], axis=1)
+display(mobmean)
+
+# Export processed dataframes to .tab and import to VDF, or read in existing .tab
 display(table)
 if updatedata != 0:
-    table.to_csv(f'./InputData.tab', sep='\t')
+    table.to_csv('./InputData.tab', sep='\t')
     subprocess.run(f"{vensim7path} \"./ImportData.cmd\"", check=True)
+    mobmean.to_csv('./MobilityData.tab', sep='\t')
 else:
     table = pd.read_csv(f'./InputData.tab', sep='\t', index_col=[0,1])
+    mobmean = pd.read_csv('./MobilityData.tab', sep='\t')
 
 # Update FinalTime cin with last day of available data - IMPORTANT! USES LAST FILE IN CHANGES LIST
 finaltime = len(table.columns)-1
@@ -903,6 +927,9 @@ for i in ([main_dur] + sens_durs):
     # Recompile results dataframe with aggregate data previously separated
     results['mean_dpm'], results['population'], results['gdp_per_cap'] = mean_dpm, popn, gdppc
     
+    # Recompile results dataframe with mobility data
+    results = results.merge(mobmean, how='left', left_index=True, right_index=True)
+        
     # Calculate normalised interquartile ranges (NIQRs)
     for var in ['eq_gdn', 'eq_dpm', 'end_gdn', 'end_dpm']:
         results[f'{var}_niqr'] = abs(results[f'{var}_0.75'] - results[f'{var}_0.25'])/results[var]
@@ -1121,6 +1148,12 @@ for i in [maindur]:
     copy(f'./{baserunname}_sens_Death.tab', '../')
     
     os.chdir("..") # Remember to go back to root directory before next iteration!
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:
