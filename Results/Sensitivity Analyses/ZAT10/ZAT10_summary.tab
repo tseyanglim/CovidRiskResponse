@@ -1,0 +1,13 @@
+Total countries	111	Population	7165814560
+Dates	2019-12-31	2021-03-31	Days	455
+Min cumulative cases	10000	Min datapoints	20	Startpoint cases	100
+Restarts	20
+Hist DPM	0.05138078350238542	2.5430248232440253	12.45688899439392
+IFR	0.0017150400000000001	0.00385149	0.011773599999999999
+R0_est	0.53	1.37	2.95
+Alpha	0.1891330000000001	1.7532600000000058	36.0173999999999
+In-sample stats	Correlation	-0.84	Slope	-0.674	R2	0.706
+Out-of-sample stats	Correlation	-0.38
+Response-stringency correlation	Mean	0.18276698105041012	Median	0.21342679970906964
+Excess mortality thresholds	EM100	49	EM50	47	EM25	40
+Countries w/ >10% vax	Partial vax	19	Full vax	4

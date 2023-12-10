@@ -1,0 +1,886 @@
+{UTF-8}
+Alpha Rel[Rgn]=
+	1
+	~	dmnl
+	~		|
+
+Alpha F[Rgn]=
+	Alpha 0[Rgn] * Alpha Rel[Rgn]
+	~	
+	~	Formulated such that Alpha at FINAL TIME is within range (0, Alpha Max) as \
+		long as 0 < Alpha Rel < 1
+	|
+
+DeathStartValue[Rgn]=
+	GET DATA AT TIME( new deaths[Rgn], :NA:)
+	~	
+	~		|
+
+Sensitivity Alpha[Rgn]=
+	Max(Alpha 0[Rgn]+Time/FINAL TIME * (Alpha F[Rgn]-Alpha 0[Rgn]), 0)
+	~	Day/Person [0,2,0.01]
+	~	Hazhir estimates Alpha=0.14 for death in million..
+	|
+
+Alpha 0[Rgn]=
+	1
+	~	
+	~		|
+
+Expected Reported Infections[Rgn]=
+	IMeas[Rgn]*Indicated Attack Rate[Rgn]*Susceptible Fraction[Rgn]
+	~	Person/Day
+	~		|
+
+alp[Rgn,Infection]=
+	0.01 ~~|
+alp[Rgn,Death]=
+	alp[Rgn,Infection] * alpratio[Rgn]
+	~	dmnl
+	~	This parameter is 1 over the number of failures in negative binomial \
+		before experiment is stopped. A value between 0 and 1 (excluding zero) is \
+		legitimate calibraiton parameters here.
+	|
+
+alpratio[Rgn]=
+	0.5
+	~	
+	~		|
+
+Asymptomatic fraction=
+	0.5
+	~	
+	~	From RLS21
+	|
+
+onsetMeas[Rgn]=
+	if then else(Time < DataStartTime[Rgn,Infection], 0, DataFlowInterpolated[Rgn,Infection\
+		])
+	~	Person/Day
+	~		|
+
+Reporting fraction penalty[Rgn]=
+	Max(IMeas[Rgn] - I[Rgn] * Asymptomatic fraction, 0) / 10
+	~	
+	~		|
+
+DataStartTime[Rgn,Infection]= INITIAL(
+	GET DATA FIRST TIME(new cases[Rgn])) ~~|
+DataStartTime[Rgn,Death]= INITIAL(
+	GET DATA FIRST TIME(new deaths[Rgn]))
+	~	
+	~		|
+
+DataFlowExport[Rgn,Series]=
+	if then else(Time < DataStartTime[Rgn,Series], -999, DataFlowInterpolated[Rgn,Series\
+		])
+	~	Person/Day
+	~	NOTE: uses -999 as placeholder value for before data range; needs to be \
+		replaced in post-processing with :NA: or equivalent
+	|
+
+DataFlowInterpolated[Rgn,Infection]:INTERPOLATE::=
+	new cases[Rgn] ~~|
+DataFlowInterpolated[Rgn,Death]=
+	new deaths[Rgn]
+	~	
+	~		|
+
+DataFlow[Rgn,Infection]:RAW::=
+	if then else(new cases[Rgn]=:NA:, :NA:, new cases[Rgn]) ~~|
+DataFlow[Rgn,Death]:RAW::=
+	if then else(new cases[Rgn]=:NA:, :NA:, new deaths[Rgn])
+	~	Person/Day
+	~		|
+
+Time to removal Tr[Rgn]=
+	DiseaseDuration
+	~	Day
+	~		|
+
+DiseaseDuration=
+	10
+	~	days
+	~		|
+
+Infection reporting fraction[Rgn]=
+	ZIDZ(onsetMeas[Rgn], Onset[Rgn])
+	~	dmnl
+	~		|
+
+AdjIFR[Rgn]=
+	GET VDF CONSTANTS('InputConstants.vdf', 'AdjIFR[Rgn]' , 1)
+	~	dmnl
+	~		|
+
+I[Rgn]= INTEG (
+	Onset[Rgn]-Deaths[Rgn]-Recovery[Rgn],
+		0)
+	~	Person
+	~		|
+
+IFR[Rgn]= INITIAL(
+	if then else(AdjIFR[Rgn] = -1, BaseIFR, AdjIFR[Rgn]))
+	~	dmnl [0,0.04,0.0005]
+	~	Note: -1 is placeholder value for missing data in InputConstants.vdf
+	|
+
+Re[Rgn]=
+	Indicated Attack Rate[Rgn] * Susceptible Fraction[Rgn] * Time to removal Tr[Rgn]
+	~	dmnl
+	~		|
+
+Perceived death rate[Rgn]= INTEG (
+	(Indicated Death Rate[Rgn]-Perceived death rate[Rgn])/Time to Perceive Risk[Rgn],
+		Indicated Death Rate[Rgn])
+	~	Person/Day
+	~		|
+
+E[Rgn]= INTEG (
+	Exposure[Rgn]+Patient Zero Arrival[Rgn]-Onset[Rgn],
+		0)
+	~	Person
+	~		|
+
+BaseIFR=
+	0.005
+	~	dmnl
+	~		|
+
+Constant Data File:IS:
+	'StatePopulations.vdf'
+	~	dmnl
+	~	'CovidModelInputs - ConstantData.vdf'
+	|
+
+CRW[Rgn]:INTERPOLATE:
+	~	dmnl
+	~		|
+
+new deaths[Rgn]:RAW:
+	~	Person/Day
+	~		|
+
+new cases[Rgn]:RAW:
+	~	Person/Day
+	~		|
+
+DataToInclude[Series]=
+	1,1
+	~	dmnl
+	~		|
+
+Dead[Rgn]= INTEG (
+	Deaths[Rgn],
+		0)
+	~	Person
+	~		|
+
+Deaths[Rgn]=
+	Removals[Rgn]*IFR[Rgn]
+	~	Person/Day
+	~		|
+
+DeathDataActive=
+	if then else(Time>Last Estimation Time,0,1)*UseDeathData
+	~	dmnl [0,1,1]
+	~		|
+
+Di[Rgn,Series]=
+	DataFlow[Rgn,Series]
+	~	Person/Day
+	~		|
+
+DiscountRate=
+	0
+	~	dmnl
+	~		|
+
+Early Death Penalty[Rgn]=
+	if then else (Time < DataStartTime[Rgn,Death], (1-TimeToIncludeFromData[Rgn,Death])*\
+		Mu[Rgn,Death] - DeathStartValue[Rgn], 0)
+	~	Person/Day
+	~	if then else(Time<StartDataCalib[Death],1,0)
+	|
+
+eps=
+	0.001
+	~	Person/Day
+	~		|
+
+Exposure[Rgn]=
+	I[Rgn]*Indicated Attack Rate[Rgn]*Susceptible Fraction[Rgn]
+	~	Person/Day
+	~		|
+
+IMeas[Rgn]= INTEG (
+	onsetMeas[Rgn]-RemovMeas[Rgn],
+		0)
+	~	Person
+	~		|
+
+Impact of perceived risk on attack rate[Rgn]=
+	1/(1+(Perceived death rate[Rgn]*Sensitivity Alpha[Rgn])^PWRisk[Rgn])
+	~	dmnl
+	~		|
+
+InclusionThreshold[Rgn,Series]= INITIAL(
+	Population[Rgn]*Threshold[Series])
+	~	Person/Day
+	~		|
+
+Indicated Attack Rate[Rgn]=
+	Beta[Rgn]*Impact of perceived risk on attack rate[Rgn]*Weather Effect on Transmission\
+		[Rgn]
+	~	1/Day
+	~		|
+
+Indicated Death Rate[Rgn]=
+	if then else(DeathDataActive=0,Deaths[Rgn], DataFlow[Rgn,Death]) /Population[Rgn]*Normalized population size
+	~	Person/Day
+	~		|
+
+Beta[Rgn]=
+	0.45
+	~	1/Day [0,5,0.05]
+	~		|
+
+Last Estimation Time=
+	1000
+	~	Day
+	~	This is the last time period when data is used in calibration in the main \
+		component of payoff (PolicyPayoff)
+	|
+
+LastStart[Series]=
+	200,200
+	~	Day
+	~		|
+
+Limit Prior Time=
+	0
+	~	dmnl
+	~		|
+
+Mu[Rgn,Series]=
+	Max ( eps , 
+	             Outputs[Rgn,Series])
+	~	Person/Day
+	~		|
+
+NBL1[Rgn,Series]=
+	if then else ( DataFlow[Rgn,Series] 
+	                  = 0, 
+	             - ln ( 1
+	                       + alp[Rgn,Series] 
+	                            * Mu[Rgn,Series] ) 
+	                  / alp[Rgn,Series] , 
+	             0)
+	~	dmnl
+	~	This is the part of negative binomial distribution calcualted when \
+		outcomes are zero.
+	|
+
+NBL2[Rgn,Series]=
+	if then else ( DataFlow[Rgn,Series] 
+	                  > 0, 
+	             GAMMA LN ( Di[Rgn,Series] 
+	                       + 1
+	                            / alp[Rgn,Series] ) 
+	                  - GAMMA LN ( 1
+	                            / alp[Rgn,Series] ) 
+	                  - GAMMA LN ( Di[Rgn,Series] 
+	                            + 1) 
+	                  - ( Di[Rgn,Series] 
+	                       + 1
+	                            / alp[Rgn,Series] ) 
+	                       * ln ( 1
+	                                 + alp[Rgn,Series] 
+	                                      * Mu[Rgn,Series] ) 
+	                  + Di[Rgn,Series] 
+	                       * ( ln ( alp[Rgn,Series] ) 
+	                            + ln ( Mu[Rgn,Series] ) ) , 
+	             0)
+	~	dmnl
+	~	This is the second piece in the loglikelihood for negative binomial which \
+		only applies to non-zero data points.
+	|
+
+NBLLFlow[Rgn,Series]=
+	( NBL1[Rgn,Series] 
+	             + NBL2[Rgn,Series] )*DataToInclude[Series]*TimeToInclude[Rgn,Series]*(Time\
+		/FINAL TIME)^DiscountRate
+	~	dmnl
+	~		|
+
+Normalized population size=
+	1e+06
+	~	Person
+	~		|
+
+Onset[Rgn]=
+	E[Rgn]/Time to onset Te[Rgn]
+	~	Person/Day
+	~		|
+
+Outputs[Rgn,Infection]=
+	Expected Reported Infections[Rgn] ~~|
+Outputs[Rgn,Death]=
+	Deaths[Rgn]
+	~	Person/Day
+	~		|
+
+Patient zero=
+	1
+	~	Person
+	~		|
+
+Patient Zero Arrival[Rgn]=
+	if then else ( Time 
+	                  < Patient Zero Arrival Time[Rgn] 
+	                  :AND: Time 
+	                       + TIME STEP 
+	                       >= Patient Zero Arrival Time[Rgn] , 
+	             Patient zero 
+	                  / TIME STEP , 
+	             0)
+	~	Person/Day
+	~		|
+
+Patient Zero Arrival Time[Rgn]=
+	100
+	~	Day [0,200]
+	~		|
+
+Population[Rgn]=
+	GET VDF CONSTANTS('InputConstants.vdf', 'Population[Rgn]' , 1)
+	~	Person
+	~		|
+
+PWRisk[Rgn]=
+	1
+	~	dmnl
+	~		|
+
+Recovered[Rgn]= INTEG (
+	Recovery[Rgn],
+		0)
+	~	Person
+	~		|
+
+Recovery[Rgn]=
+	Removals[Rgn]*(1-IFR[Rgn])
+	~	Person/Day
+	~		|
+
+Removals[Rgn]=
+	I[Rgn]/Time to removal Tr[Rgn]
+	~	Person/Day
+	~		|
+
+RemovMeas[Rgn]=
+	IMeas[Rgn]/Time to removal Tr[Rgn]
+	~	Person/Day
+	~		|
+
+Rgn:
+	CHN
+	~	
+	~		|
+
+RgnAll:
+	Rgn
+	~	
+	~		|
+
+S[Rgn]= INTEG (
+	-Exposure[Rgn],
+		Population[Rgn] -1)
+	~	Person
+	~		|
+
+Sensitivity to Weather=
+	2.64
+	~	dmnl
+	~	From RLS21
+	|
+
+Series:
+	Infection,Death
+	~	
+	~		|
+
+Shft:
+	(S1-S20)
+	~	
+	~		|
+
+Susceptible Fraction[Rgn]=
+	S[Rgn]/Population[Rgn]
+	~	dmnl
+	~		|
+
+Threshold[Series]=
+	1e-06,5e-08
+	~	1/Day
+	~		|
+
+Time to onset Te[Rgn]=
+	4
+	~	Day [0,10,1]
+	~		|
+
+Time to increase risk[Rgn]=
+	60
+	~	Day [0,100,5]
+	~	7
+	|
+
+Time to Perceive Risk[Rgn]=
+	(if then else(Indicated Death Rate
+	[Rgn]>Perceived death rate
+	[Rgn],
+	Time to increase risk[Rgn],Time to reduce risk[Rgn]))
+	~	Day
+	~		|
+
+Time to reduce risk[Rgn]=
+	60
+	~	Day
+	~		|
+
+TimeToInclude[Rgn,Series]=
+	if then else(Time<=Last Estimation Time :AND: Time>Last Estimation Time*Limit Prior Time\
+		-100,1,0)*TimeToIncludeFromData[Rgn,Series]
+	~	dmnl
+	~		|
+
+TimeToIncludeFromData[Rgn,Series]=
+	if then else(DataFlow[Rgn,Series]>InclusionThreshold[Rgn,Series] :OR: Time>LastStart\
+		[Series],1,0)
+	~	dmnl
+	~		|
+
+UseDeathData=
+	0
+	~	dmnl
+	~		|
+
+Weather Effect on Transmission[Rgn]=
+	if then else(CRW[Rgn]=:NA:, 1, CRW[Rgn]^Sensitivity to Weather)
+	~	dmnl
+	~		|
+
+XErrAbs[Rgn]=
+	ABS(Di[Rgn,Death]-Outputs[Rgn,Death])*if then else(Time>Last Estimation Time,1,0)
+	~	Person/Day
+	~		|
+
+********************************************************
+	.Control
+********************************************************~
+		Simulation Control Parameters
+	|
+
+FINAL TIME  = 455
+	~	Day
+	~	The final time for the simulation.
+	|
+
+INITIAL TIME  = 1
+	~	Day
+	~	The initial time for the simulation.
+	|
+
+SAVEPER  = 1
+	~	Day [0,?]
+	~	The frequency with which output is stored.
+	|
+
+TIME STEP  = 0.25
+	~	Day [0,?]
+	~	The time step for the simulation.
+	|
+
+\\\---/// Sketch information - do not modify anything except names
+V300  Do not put anything below this section - it will be ignored
+*View 1
+$192-192-192,0,Arial|12||0-0-0|0-0-0|0-0-255|-1--1--1|-1--1--1|96,96,75,0
+10,1,S,1075,16,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,2,E,1271,20,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,3,I,1468,16,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,4,Recovered,1687,-56,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,5,7,2,4,0,0,22,0,0,0,-1--1--1,,1|(1205,23)|
+1,6,7,1,100,0,0,22,0,0,0,-1--1--1,,1|(1139,23)|
+11,7,2114,1172,23,8,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,8,Exposure,1172,36,35,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,9,11,3,4,0,0,22,0,0,0,-1--1--1,,1|(1404,23)|
+1,10,11,2,100,0,0,22,0,0,0,-1--1--1,,1|(1335,23)|
+11,11,1278,1368,23,8,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,12,Onset,1368,36,23,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,13,1,72,1,0,0,0,0,128,0,-1--1--1,,1|(1071,51)|
+10,14,Beta,1299,468,19,12,8,131,0,2,0,0,0,0,0-0-0,0-0-0,|11||255-0-0,0,0,0,0,0,0
+1,15,2,11,1,0,0,0,0,128,0,-1--1--1,,1|(1335,-16)|
+10,16,Time to onset Te,1363,-48,52,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||0-128-0,0,0,0,0,0,0
+10,17,Time to removal Tr,1695,3,39,20,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|11||0-128-0,0,0,0,0,0,0
+1,18,16,11,1,0,0,0,0,128,0,-1--1--1,,1|(1371,-17)|
+10,19,IFR,1623,135,16,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,20,19,36,0,0,0,0,0,128,0,-1--1--1,,1|(1600,124)|
+10,21,Perceived death rate,1452,252,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,22,Impact of perceived risk on attack rate,1388,328,72,20,8,131,0,0,0,0,0,0,0,0,0,0,0,0
+1,23,21,22,1,0,0,0,0,128,0,-1--1--1,,1|(1431,287)|
+10,24,Time to increase risk,1656,408,47,20,8,131,0,2,0,0,0,0,0-0-0,0-0-0,|12||255-0-0,0,0,0,0,0,0
+10,25,Sensitivity Alpha,1419,403,59,12,8,131,0,2,-1,0,0,0,0-0-0,0-0-0,|12||255-0-0,0,0,0,0,0,0
+1,26,25,22,0,0,0,0,0,64,0,-1--1--1,,1|(1408,376)|
+1,27,3,8,1,0,0,0,0,128,0,-1--1--1,,1|(1367,92)|
+10,28,Dead,1691,71,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,29,31,4,4,0,0,22,0,0,0,-1--1--1,,1|(1615,-53)|
+1,30,31,3,100,0,0,22,0,0,0,-1--1--1,,1|(1468,-53)|
+11,31,1388,1575,-53,8,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,32,Recovery,1575,-29,35,12,40,131,0,0,-1,0,0,0,0,0,0,0,0,0
+1,33,35,28,4,0,0,22,0,0,0,-1--1--1,,1|(1607,72)|
+1,34,35,3,100,0,0,22,0,0,0,-1--1--1,,1|(1468,72)|
+11,35,1102,1556,72,8,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,36,Deaths,1556,99,27,12,40,131,0,0,-1,0,0,0,0,0,0,0,0,0
+10,37,Removals,1579,8,37,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,38,3,37,0,0,0,0,0,64,0,-1--1--1,,1|(1520,12)|
+1,39,17,37,0,0,0,0,0,64,0,-1--1--1,,1|(1644,4)|
+1,40,37,32,1,0,0,0,0,128,0,-1--1--1,,1|(1584,-12)|
+1,41,37,35,1,0,0,0,0,128,0,-1--1--1,,1|(1580,36)|
+10,42,IFR,1528,-104,23,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|11||128-128-128,0,0,0,0,0,0
+1,43,42,31,0,0,0,0,0,128,0,-1--1--1,,1|(1548,-81)|
+10,44,Outputs,1023,608,29,12,8,131,0,0,0,0,0,0,0,0,0,0,0,0
+10,45,NBL1,751,1007,24,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,46,NBL2,852,1020,24,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,47,Di,607,1092,12,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,48,Mu,656,908,13,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,49,47,46,0,0,0,0,0,128,0,-1--1--1,,1|(716,1057)|
+1,50,48,45,0,0,0,0,0,128,0,-1--1--1,,1|(700,951)|
+10,51,alp,815,1115,13,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|11||255-0-0,0,0,0,0,0,0
+1,52,51,45,0,0,0,0,0,128,0,-1--1--1,,1|(788,1067)|
+1,53,51,46,0,0,0,0,0,64,0,-1--1--1,,1|(832,1073)|
+1,54,48,46,0,0,0,0,0,64,0,-1--1--1,,1|(743,956)|
+10,55,NBLLFlow,815,915,39,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,56,45,55,0,0,0,0,0,128,0,-1--1--1,,1|(780,968)|
+1,57,46,55,0,0,0,0,0,128,0,-1--1--1,,1|(835,973)|
+1,58,44,48,0,0,0,0,0,128,0,-1--1--1,,1|(844,752)|
+10,59,eps,683,844,15,12,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|11||0-128-0,0,0,0,0,0,0
+1,60,59,48,0,0,0,0,0,64,0,-1--1--1,,1|(672,867)|
+10,61,TimeToInclude,840,812,53,12,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,62,DataToInclude,983,880,52,12,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,63,Last Estimation Time,1159,692,57,20,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||255-128-0,0,0,0,0,0,0
+1,64,63,61,0,0,0,0,0,64,0,-1--1--1,,1|(995,751)|
+1,65,147,61,0,0,0,0,0,64,0,-1--1--1,,1|(868,837)|
+12,66,0,2599,72,328,508,3,188,0,0,1,0,0,0,0,0,0,0,0,0
+Data_vs._Sim_(infection)
+12,67,0,-228,359,520,615,3,188,0,0,1,0,0,0,0,0,0,0,0,0
+Data_vs._Sim_Death
+12,68,0,2116,16,152,152,3,44,0,0,1,0,0,0,0,0,0,0,0,0
+Three_model_outpuuts
+12,69,0,2116,332,152,152,3,44,0,0,1,0,0,0,0,0,0,0,0,0
+Rt
+10,70,Indicated Attack Rate,1275,371,43,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,71,Expected Reported Infections,851,215,71,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,72,Susceptible Fraction,1008,76,44,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,73,72,71,1,0,0,0,0,128,0,-1--1--1,,1|(907,120)|
+1,74,22,70,1,0,0,0,0,128,0,-1--1--1,,1|(1336,347)|
+1,75,14,70,1,0,0,0,0,128,0,-1--1--1,,1|(1284,423)|
+1,76,70,71,1,0,0,0,0,128,0,-1--1--1,,1|(983,336)|
+1,77,72,8,1,0,0,0,0,128,0,-1--1--1,,1|(1071,87)|
+10,78,IMeas,667,111,40,20,3,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,79,80,78,4,0,0,22,0,0,0,-1--1--1,,1|(601,108)|
+11,80,530,568,108,8,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,81,onsetMeas,568,124,41,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+12,82,48,819,112,12,8,0,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,83,84,82,4,0,0,22,0,0,0,-1--1--1,,1|(788,115)|
+11,84,48,759,115,8,8,34,3,0,0,1,0,0,0,0,0,0,0,0,0
+10,85,RemovMeas,759,135,48,12,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+10,86,Time to removal Tr,715,200,44,20,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,87,86,85,0,0,0,0,0,128,0,-1--1--1,,1|(736,168)|
+1,88,78,85,1,0,0,0,0,128,0,-1--1--1,,1|(684,151)|
+10,89,DataFlow,467,628,36,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,90,new deaths,580,541,44,12,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|12||0-0-255,0,0,0,0,0,0
+10,91,new cases,420,536,68,9,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|12||0-0-255,0,0,0,0,0,0
+1,92,91,89,0,0,0,0,0,64,0,-1--1--1,,1|(440,572)|
+1,93,89,47,1,0,0,0,0,64,0,-1--1--1,,1|(427,880)|
+1,94,89,45,1,0,0,0,0,64,0,-1--1--1,,1|(607,995)|
+1,95,89,46,1,0,0,0,0,64,0,-1--1--1,,1|(595,1124)|
+1,96,84,78,100,0,0,22,0,0,0,-1--1--1,,1|(729,115)|
+1,97,71,44,1,0,0,0,0,128,0,-1--1--1,,1|(935,408)|
+1,98,62,55,0,0,0,0,0,128,0,-1--1--1,,1|(899,895)|
+1,99,61,55,0,0,0,0,0,128,0,-1--1--1,,1|(829,855)|
+10,100,Weather Effect on Transmission,1164,444,68,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,101,CRW,1208,512,21,12,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-0-255,0,0,0,0,0,0
+1,102,101,100,0,0,0,0,0,128,0,-1--1--1,,1|(1192,485)|
+10,103,Sensitivity to Weather,1087,504,48,20,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,104,103,100,0,0,0,0,0,128,0,-1--1--1,,1|(1119,476)|
+1,105,100,70,0,0,0,0,0,128,0,-1--1--1,,1|(1213,412)|
+10,106,Population,900,-32,39,12,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|12||0-0-255,0,0,0,0,0,0
+1,107,106,1,0,0,0,0,0,128,1,-1--1--1,,1|(980,-12)|
+1,108,106,72,0,0,0,0,0,128,0,-1--1--1,,1|(945,11)|
+10,109,Population,1739,208,48,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+10,110,Indicated Death Rate,1539,160,44,20,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,111,110,167,0,0,0,0,0,64,0,-1--1--1,,1|(1535,205)|
+1,112,36,110,0,0,0,0,0,64,0,-1--1--1,,1|(1552,117)|
+1,113,109,110,0,0,0,0,0,128,0,-1--1--1,,1|(1643,183)|
+10,114,Time to reduce risk,1731,364,41,20,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||255-0-0,0,0,0,0,0,0
+10,115,Patient Zero Arrival Time,1124,-157,45,20,8,131,0,2,-1,0,0,0,-1--1--1,0-0-0,|12||255-0-0,0,0,0,0,0,0
+11,116,2092,1247,-68,8,7,33,3,0,0,2,0,0,0,0,0,0,0,0,0
+10,117,Patient Zero Arrival,1192,-68,45,20,40,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,118,115,117,0,0,0,0,0,64,0,-1--1--1,,1|(1153,-119)|
+12,119,48,1251,-132,12,8,0,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,120,116,119,100,0,0,22,0,0,0,-1--1--1,,1|(1247,-101)|
+1,121,116,2,4,0,0,22,0,0,0,-1--1--1,,1|(1247,-32)|
+10,122,Time,1115,-53,29,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,123,122,117,0,0,0,0,0,64,0,-1--1--1,,1|(1140,-57)|
+10,124,TIME STEP,1100,-124,52,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,125,124,117,0,0,0,0,0,64,0,-1--1--1,,1|(1132,-105)|
+10,126,DeathDataActive,1756,244,63,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,127,126,110,0,0,0,0,0,128,0,-1--1--1,,1|(1664,208)|
+10,128,PWRisk,1364,272,31,12,8,3,0,2,-1,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,129,128,22,0,0,0,0,0,64,0,-1--1--1,,1|(1371,287)|
+12,130,0,87,-496,187,217,3,188,0,0,1,0,0,0,0,0,0,0,0,0
+Estimated_Parameters
+10,131,BaseIFR,1755,163,33,12,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,132,131,19,0,0,0,0,0,128,1,-1--1--1,,1|(1687,148)|
+1,133,70,8,1,0,0,0,0,128,0,-1--1--1,,1|(1175,104)|
+12,134,0,1611,843,167,151,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+Susceptible Fraction[Rgn],Graph
+12,135,0,1968,839,188,156,3,188,0,0,2,0,0,0,0,0,0,0,0,0
+IFR[Rgn],Graph
+10,136,Early Death Penalty,679,772,43,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,137,48,136,0,0,0,0,0,128,0,-1--1--1,,1|(665,848)|
+10,138,Normalized population size,1456,119,55,20,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,139,138,110,0,0,0,0,0,64,0,-1--1--1,,1|(1492,135)|
+10,140,Patient zero,1171,-28,59,12,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,141,140,117,0,0,0,0,0,64,0,-1--1--1,,1|(1175,-39)|
+10,142,DataFlowExport,511,395,60,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,143,DiscountRate,956,1012,49,12,8,3,0,2,-1,0,0,0,0-0-0,0-0-0,|12||255-128-0,0,0,0,0,0,0
+1,144,143,55,0,0,0,0,0,64,0,-1--1--1,,1|(891,968)|
+10,145,FINAL TIME,1027,936,53,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,146,145,55,0,0,0,0,0,64,0,-1--1--1,,1|(920,924)|
+10,147,Time,887,855,29,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,148,147,55,0,0,0,0,0,64,0,-1--1--1,,1|(856,880)|
+10,149,TimeToIncludeFromData,652,655,91,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,150,149,61,0,0,0,0,0,128,0,-1--1--1,,1|(740,728)|
+1,151,89,149,0,0,0,0,0,128,0,-1--1--1,,1|(541,637)|
+10,152,InclusionThreshold,736,580,67,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,153,152,149,0,0,0,0,0,128,0,-1--1--1,,1|(699,611)|
+10,154,Threshold,883,595,36,12,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,155,154,152,0,0,0,0,0,64,1,-1--1--1,,1|(831,588)|
+10,156,LastStart,559,708,36,12,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,157,156,149,0,0,0,0,0,64,0,-1--1--1,,1|(601,684)|
+1,158,179,149,0,0,0,0,0,64,0,-1--1--1,,1|(747,637)|
+1,159,63,126,1,0,0,0,0,128,0,-1--1--1,,1|(1719,303)|
+10,160,Time,1844,287,29,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,161,160,126,0,0,0,0,0,64,0,-1--1--1,,1|(1803,268)|
+10,162,UseDeathData,1788,320,56,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||255-128-0,0,0,0,0,0,0
+1,163,162,126,0,0,0,0,0,128,0,-1--1--1,,1|(1773,284)|
+10,164,Limit Prior Time,1012,816,60,12,8,3,0,2,0,0,0,0,0-0-0,0-0-0,|12||255-128-0,0,0,0,0,0,0
+1,165,164,61,0,0,0,0,0,128,0,-1--1--1,,1|(929,812)|
+12,166,48,1564,251,12,8,0,3,0,0,-1,0,0,0,0,0,0,0,0,0
+11,167,48,1531,255,8,8,2,3,0,0,1,0,0,0,0,0,0,0,0,0
+1,168,167,166,100,0,0,22,0,0,0,-1--1--1,,1|(1548,255)|
+10,169,Time to Perceive Risk,1608,303,52,20,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,170,169,167,0,0,0,0,0,64,0,-1--1--1,,1|(1564,276)|
+1,171,21,169,1,0,0,0,0,64,0,-1--1--1,,1|(1512,292)|
+1,172,110,169,0,0,0,0,0,64,0,-1--1--1,,1|(1569,224)|
+1,173,24,169,0,0,0,0,0,64,0,-1--1--1,,1|(1635,360)|
+1,174,114,169,0,0,0,0,0,64,0,-1--1--1,,1|(1675,336)|
+10,175,XErrAbs,831,680,32,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,176,44,175,0,0,0,0,0,128,0,-1--1--1,,1|(935,640)|
+1,177,63,175,0,0,0,0,0,128,0,-1--1--1,,1|(989,683)|
+1,178,47,175,0,0,0,0,0,128,0,-1--1--1,,1|(715,892)|
+10,179,Time,808,627,29,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,180,179,175,0,0,0,0,0,64,0,-1--1--1,,1|(816,648)|
+1,181,149,136,0,0,0,0,0,128,0,-1--1--1,,1|(664,700)|
+12,182,48,480,108,12,8,0,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,183,80,182,100,0,0,22,0,0,0,-1--1--1,,1|(525,108)|
+10,184,AdjIFR,1752,119,28,12,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-0-255,0,0,0,0,0,0
+1,185,184,19,0,0,0,0,0,128,1,-1--1--1,,1|(1688,128)|
+1,186,167,21,4,0,0,22,0,0,0,-1--1--1,,1|(1507,255)|
+10,187,DataFlow,1383,167,45,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,188,187,110,0,0,0,0,0,128,0,-1--1--1,,1|(1456,163)|
+10,189,Re,1092,187,12,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,190,70,189,0,0,0,0,0,128,0,-1--1--1,,1|(1184,279)|
+1,191,72,189,0,0,0,0,0,128,0,-1--1--1,,1|(1048,128)|
+10,192,Time to removal Tr,991,216,44,20,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,193,192,189,0,0,0,0,0,128,0,-1--1--1,,1|(1052,200)|
+10,194,Deaths,1124,575,36,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,195,194,44,0,0,0,0,0,128,0,-1--1--1,,1|(1076,589)|
+10,196,Population,847,520,48,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,197,196,152,0,0,0,0,0,128,1,-1--1--1,,1|(796,548)|
+10,198,Infection reporting fraction,668,260,64,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,199,Onset,644,316,32,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,200,199,198,0,0,0,0,0,128,0,-1--1--1,,1|(651,296)|
+1,201,81,198,0,0,0,0,0,128,0,-1--1--1,,1|(612,180)|
+10,202,DiseaseDuration,1828,-1,64,9,8,3,0,0,-1,0,0,0,0,0,0,0,0,0
+1,203,202,17,0,0,0,0,0,128,0,-1--1--1,,1|(1755,0)|
+10,204,DataStartTime,623,431,53,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+10,205,DataFlowInterpolated,399,440,80,9,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,206,90,204,0,0,0,0,0,128,1,-1--1--1,,1|(600,492)|
+1,207,90,205,0,0,0,0,0,128,0,-1--1--1,,1|(492,491)|
+10,208,Time,1535,393,29,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,209,91,204,0,0,0,0,0,128,1,-1--1--1,,1|(511,487)|
+1,210,91,205,0,0,0,0,0,128,0,-1--1--1,,1|(411,492)|
+1,211,205,81,0,0,0,0,0,128,0,-1--1--1,,1|(480,287)|
+1,212,205,142,0,0,0,0,0,128,0,-1--1--1,,1|(443,420)|
+1,213,204,142,0,0,0,0,0,128,0,-1--1--1,,1|(573,415)|
+10,214,Time,543,295,29,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,215,214,142,0,0,0,0,0,64,0,-1--1--1,,1|(529,340)|
+1,216,90,89,0,0,0,0,0,64,0,-1--1--1,,1|(529,579)|
+10,217,Reporting fraction penalty,755,12,55,20,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+12,218,0,2379,691,113,36,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V2 - Changed reporting ratio to reporting fraction; added reporting fraction penalty to prevent IMeas > I
+10,219,I,839,16,13,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,220,78,217,0,0,0,0,0,128,0,-1--1--1,,1|(705,65)|
+1,221,219,217,0,0,0,0,0,128,0,-1--1--1,,1|(824,13)|
+1,222,204,81,0,0,0,0,0,128,0,-1--1--1,,1|(596,283)|
+1,223,214,81,0,0,0,0,0,64,0,-1--1--1,,1|(553,215)|
+12,224,0,2443,812,216,56,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V3 - Fixed pre-data interpolation issue with onsetMeas. Shortened various variable names. Added alpratio param to upweight deaths compared to infections. Updated reporting fraction penalty to IMeas>0.5I to account for asymptomatics. Switched Expected Reported Infections from using IMeas directly to using smoothed reporting ratio from IMeas:I.
+10,225,alpratio,920,1099,28,12,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||255-0-0,0,0,0,0,0,0
+1,226,225,51,0,0,0,0,0,128,0,-1--1--1,,1|(868,1108)|
+10,227,Asymptomatic fraction,687,-81,53,20,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||0-128-0,0,0,0,0,0,0
+1,228,227,217,0,0,0,0,0,64,0,-1--1--1,,1|(716,-41)|
+12,229,0,2383,919,116,27,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V3B - Same updates as V3 but still using IMeas directly for expected reported infections
+1,230,78,71,1,0,0,0,0,128,0,-1--1--1,,1|(776,75)|
+10,231,Alpha 0,1367,444,29,12,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||255-0-0,0,0,0,0,0,0
+1,232,231,25,0,0,0,0,0,128,0,-1--1--1,,1|(1387,428)|
+1,233,208,25,0,0,0,0,0,128,0,-1--1--1,,1|(1500,395)|
+12,234,0,2383,1008,119,36,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V4B - as V3B but changed sensitivity Alpha to linear function of time with Alpha 0 and Alpha F parameters
+10,235,Alpha F,1432,460,29,12,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||255-0-0,0,0,0,0,0,0
+10,236,FINAL TIME,1527,447,53,12,8,2,0,3,-1,0,0,0,128-128-128,0-0-0,|12||128-128-128,0,0,0,0,0,0
+1,237,235,25,0,0,0,0,0,128,0,-1--1--1,,1|(1427,437)|
+1,238,236,25,0,0,0,0,0,128,0,-1--1--1,,1|(1479,427)|
+12,239,0,2828,701,172,45,8,7,0,0,-1,0,0,0,0,0,0,0,0,0
+V5B - changed sensitivity Alpha to allow limited movement from Alpha 0 to Alpha F (+/- 50%). Modified early death penalty to function only before data start time. Downweighted reporting fraction and early death penalties.
+10,240,Alpha Rel,1391,499,36,12,8,3,0,2,0,0,0,0,-1--1--1,0-0-0,|12||255-0-0,0,0,0,0,0,0
+1,241,231,235,0,0,0,0,0,128,0,-1--1--1,,1|(1392,448)|
+1,242,240,235,0,0,0,0,0,128,0,-1--1--1,,1|(1408,483)|
+10,243,DeathStartValue,604,605,60,12,8,3,0,0,0,0,0,0,0,0,0,0,0,0
+1,244,90,243,0,0,0,0,0,128,0,-1--1--1,,1|(588,568)|
+1,246,204,136,0,0,0,0,0,64,0,-1--1--1,,1|(648,589)|
+1,247,243,136,0,0,0,0,0,64,0,-1--1--1,,1|(635,677)|
+1,248,179,136,0,0,0,0,0,64,0,-1--1--1,,1|(752,689)|
+///---\\\
+:GRAPH Three_model_outpuuts
+:TITLE Three model outpuuts
+:SCALE
+:VAR onset
+:LINE-WIDTH 2
+:SCALE
+:VAR death rate
+:LINE-WIDTH 2
+:SCALE
+:VAR "normalized contact rate (Cn)"
+:LINE-STYLE DOT
+
+:GRAPH Rt
+:TITLE Rt
+:SCALE
+:VAR Rt
+:LINE-WIDTH 2
+
+:TABLE Estimated_Parameters
+:TITLE Estimated Parameters
+:PRETTYNUM
+:X-MIN 1
+:X-MAX 1
+:FIRST-CELLWIDTH 30
+:CELLWIDTH 14
+:FONT Times New Roman|12||0-0-0
+:VAR "Time to onset (Te)"[Rgn]
+:VAR "Time to removal (Tr)"[Rgn]
+:VAR "Time to perceive (Tp)"[Rgn]
+:VAR Time to reduce risk[Rgn]
+:VAR "Sensitivity to death (Alpha)"[Rgn]
+:VAR alp[Rgn,Infection]
+:VAR alp[Rgn,Death]
+:VAR "Initial Attack rate (Beta)"[Rgn]
+:VAR Patient Zero Arrival Time[Rgn]
+:VAR Sensitivity to Weather[Rgn]
+:VAR Sens IFR to Death[Rgn]
+:VAR BaseIFR[Rgn]
+:VAR Strength of Adherence Fatigue[Rgn]
+
+:GRAPH Data_vs._Sim_(infection)
+:TITLE Data vs. Sim (infection)
+:SCALE
+:VAR DataFlowOverTime[RgnAll,Infection]
+:VAR OutputsOverTime[RgnAll,Infection]
+
+:GRAPH Data_vs._Sim_Death
+:TITLE Data vs. Sim (death)
+:SCALE
+:VAR DataFlowOverTime[RgnAll,Death]
+:VAR OutputsOverTime[RgnAll,Death]
+:VAR OutputsOverTime[RgnAll,Death]
+:DATASET 403All_noAdh-NoReset
+
+:GRAPH Test_Ascertainment
+:TITLE Test vs. Ascertainment
+:X-AXIS TestForGraphs[USA]
+:SCALE
+:VAR Ascertainment Rate[USA]
+
+:GRAPH Data_vs._Sim_Test
+:TITLE Data vs. Sim (Test)
+:SCALE
+:VAR DataFlowOverTime[Rgn,Test]
+:VAR OutputsOverTime[Rgn,Test]
+
+:GRAPH DataFlowComparisons
+:TITLE DataFlowComparisons
+:SCALE
+:VAR DataFlowDeath
+:SCALE
+:VAR DataFlowInfection
+
+:GRAPH Data_vs._Sim_Death_0
+:TITLE Data vs. Sim (death)
+:SCALE
+:VAR DataFlowOverTime[RgnAll,Death]
+:VAR OutputsOverTime[RgnAll,Death]
+:L<%^E!@
+4:Time
+5:DataFlowExport[Rgn,Series]
+6:CHN
+6:Death
+6:Infection
+6:S1
+9:Current
+19:75,0
+24:1
+25:455
+26:455
+11:SEIRB-V10-SEIRbFirst.VOC
+12:NBLLPayoff.vpd
+13:InputConstants.vdf,InputData.vdf
+15:1,0,0,0,0,0
+27:0,
+34:0,
+42:0
+72:0
+73:0
+35:Date
+36:YYYY-MM-DD
+37:2019
+38:12
+39:31
+40:4
+41:0
+95:0
+96:0
+77:1
+78:2
+93:0
+94:0
+92:0
+91:0
+90:0
+87:0
+75:
+43:

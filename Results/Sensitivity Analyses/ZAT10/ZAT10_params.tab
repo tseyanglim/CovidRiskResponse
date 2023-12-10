@@ -1,0 +1,8 @@
+	Mean	Median	StDev
+Beta	3.31	3.84	1.02
+Alpha 0	16.7	1.75	98
+Time to increase risk	10.7	2.95	21
+Time to reduce risk	82.6	36.4	116
+Patient Zero Arrival Time	104	105	12.1
+alp[Infection]	0.977	1	0.127
+alp[Death]	0.579	0.6	0.0824

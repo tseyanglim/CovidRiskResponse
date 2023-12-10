@@ -1,0 +1,99 @@
+{
+	"baserunname": "ZB", 
+	"data_url": "https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data-old.csv", 
+	"mobdata_url": "https://raw.githubusercontent.com/owid/covid-19-data/master/scripts/grapher/Google%20Mobility%20Trends%20(2020).csv", 
+	"emdata_url": "https://raw.githubusercontent.com/TheEconomist/covid-19-the-economist-global-excess-deaths-model/main/output-data/export_country_cumulative.csv", 
+	"ihme_url_partial": "https://ihmecovid19storage.blob.core.windows.net/archive/2022-12-16/data_download_file_reference", 
+	"simsettings": {
+		"model": "SEIRB-Simple-V5B.mdl", 
+		"data": [
+			"InputData.vdf", 
+			"InputConstants.vdf"
+			], 
+		"payoff": "NBLLPayoff.vpd", 
+		"sensitivity": "", 
+		"optparm": "SEIRB-Simple-V5-Fixed.voc", 
+		"changes": ["FinalTime.cin", "FixedTest.cin", "DiseaseDuration.cin"], 
+		"savelist": "CovRegV13.lst", 
+		"senssavelist": "CovRegV11S.lst"
+		},
+	"vensimpath": "C:/Program Files (x86)/Vensim7/vensimdp.exe", 
+	"vensim7path": "C:/Program Files (x86)/Vensim7/vensimdp.exe",  
+	"timelimit": 30, 
+	"updatedata": 0, 
+	"mccores": 0,
+	"mcsettings": {
+		"OPTIMIZER": "MCMC", 
+		"SENSITIVITY": "Off", 
+		"MULTIPLE_START": "RRandom", 
+		"RESTART_MAX": 10,
+		"FRACTIONAL_TOLERANCE": 1e-6,
+		"MCLIMIT": 500000,
+		"MCINITMETHOD": 3,
+		"MCTEMP":1,
+		"MCBURNIN": 300000,
+		"MCNCHAINS": 2
+		}, 
+	"fixparams": {
+		"nbr": {"Alpha 0[Rgn]": 1e-09, "Alpha Rel[Rgn]": 1, "Time to increase risk[Rgn]": 1, "Time to reduce risk[Rgn]": 1}
+		}, 
+	"datasettings": {
+		"dataset": "OWID", 
+		"min_cases": 10000, 
+		"min_datapoints": 20, 
+		"start_cases": 100, 
+		"early_data_cutoff": 0, 
+		"vax_threshold": 10, 
+		"droplist": ["OWID_WRL", "OWID_AFR", "OWID_ASI", "OWID_EUR", "OWID_EUN", "OWID_INT", "OWID_NAM", "OWID_OCE", "OWID_SAM", "ABW", "AIA", "AND", "BES", "BHS", "BMU", "CMR", "CUW", "CYM", "DJI", "FJI", "FLK", "FRO", "GGY", "GIB", "GNQ", "GRL", "HKG", "IMN", "JEY", "KIR", "MAC", "MSR", "NRU", "PLW", "SHN", "SRB", "TCA", "TON", "TUV", "TWN"], 
+		"ihme_c_dict": {
+			"Global": "OWID_WRL", 
+			"Taiwan (Province of China)": "TWN", 
+			"Timor-Leste": "TLS", 
+			"Viet Nam": "VNM", 
+			"Republic of Moldova": "MDA", 
+			"Russian Federation": "RUS", 
+			"Republic of Korea": "KOR", 
+			"United States of America": "USA", 
+			"Bolivia (Plurinational State of)": "BOL", 
+			"Venezuela (Bolivarian Republic of)": "VEN", 
+			"Iran (Islamic Republic of)": "IRN", 
+			"Syrian Arab Republic": "SYR", 
+			"Türkiye": "TUR", 
+			"Democratic Republic of the Congo": "COD", 
+			"Cabo Verde": "CPV", 
+			"Côte d'Ivoire": "CIV", 
+			"Hong Kong Special Administrative Region of China": "HKG", 
+			"Macao Special Administrative Region of China": "MAC"
+			}, 
+		"renames": {"OWID_KOS": "XKX"}
+		}, 
+	"analysissettings": {
+		"hist_windows": [180], 
+		"end_date": 455, 
+		"delta": 14, 
+		"eqtime": 547, 
+		"earlytime": 122, 
+		"main_dur": 10, 
+		"sens_durs": [], 
+		"genparams": ["DiseaseDuration"], 
+		"means_list": ["Re", "Outputs[Death]", "Sensitivity Alpha"], 
+		"perc_list": [0, 0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975, 1], 
+		"gof_vars": {"sim": ["Outputs[Infection]", "Outputs[Death]"], "data": ["DataFlowExport[Infection]", "DataFlowExport[Death]"]}, 
+		"iqr_list": [
+			"beta", "alpha 0", "alpha f", "t0", "theta", "PMean", "PMeanRelax", 
+			"eq_alpha", "end_alpha", "alp", "DeathReportingRatio"
+			], 
+		"params_list": [
+			"beta", "alpha 0", "alpha f", "t0", "theta", 
+			"PMean", "PMeanRelax", "DeathReportingRatio", "alp"
+			], 
+		"tablekeys": [
+			"PMean", "PMeanRelax", "beta", "alpha 0", "alpha f", "t0", "theta", "alp", "eq_gdn", "eq_dpm", "eq_alpha", "end_gdn", "end_dpm", "end_alpha", "ear_gdn", "ear_alpha", "mean_dpm", "avg_Re", "chg_dpm", "eq_gdn_niqr", "eq_dpm_niqr", "end_gdn_niqr", "end_dpm_niqr"
+			],
+		"sens_vars": [["beta"], ["alpha"], ["PMean"]], 
+		"sens_mults": [0.5, 1, 2], 
+		"c_list": ["USA", "COL", "KOR", "ZAF"], 
+		"c_names": ["USA", "Colombia", "South Korea", "South Africa"],
+		"scenariolist": []
+		}
+	}

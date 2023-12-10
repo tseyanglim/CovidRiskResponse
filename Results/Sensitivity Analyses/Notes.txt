@@ -1,0 +1,3 @@
+Files ZB10_xxx are results including data from the early pandemic (Appendix S4.f).
+
+Files ZAT10_xxx are results using estimated true infection & death data from IHME (Appendix S4.g).
