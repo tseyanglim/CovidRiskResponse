@@ -14,7 +14,7 @@ Contains:
 2. the input `.tab` files processed from [OurWorldInData](https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv) based on the code in `Analysis Code`,
 3. an input `.tab` file showing countries by % of people fully or partially vaccinated within the analysis time horizon, processed from OurWorldInData using the code in `Analysis Code`,
 4. the `.xlsx` file used to calculate country-specific IFRs based on age distributions (see S2 of the Supplement for explanation), 
-5. an `.RData` file drawn from [Oxford CGRT](https://github.com/OxCGRT/covid-policy-tracker) used to produce Figure 1 in the main paper, and
+5. an `.RData` file drawn from [Oxford CGRT](https://github.com/OxCGRT/covid-policy-tracker) used to produce Figure S2 in the Supplement, and
 6. a `.csv` file containing Hofstede's cultural construct values appended to model estimation results.
 
 ### Results
